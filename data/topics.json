@@ -3,16 +3,24 @@
   "start_date": "2026-09-26",
   "topics": [
     { "title": "から・ので", "points": [{ "id": "kara-reason", "name": "から" }, { "id": "node-reason", "name": "ので" }] },
+    { "title": "ている・てある", "points": [{ "id": "teiru", "name": "ている" }, { "id": "tearu", "name": "てある" }] },
     { "title": "ように・ために", "points": [{ "id": "youni-purpose", "name": "ように" }, { "id": "tameni-purpose", "name": "ために" }] },
+    { "title": "わけではない・とは限らない", "points": [{ "id": "wake-dewa-nai", "name": "わけではない" }, { "id": "toha-kagiranai", "name": "とは限らない" }] },
     { "title": "は・が", "points": [{ "id": "wa", "name": "は" }, { "id": "ga", "name": "が" }] },
+    { "title": "ものの・にもかかわらず", "points": [{ "id": "monono", "name": "ものの" }, { "id": "nimo-kakawarazu", "name": "にもかかわらず" }] },
     { "title": "を・に・で", "points": [{ "id": "wo", "name": "を" }, { "id": "ni", "name": "に" }, { "id": "de", "name": "で" }] },
+    { "title": "とはいえ・といえども", "points": [{ "id": "toha-ie", "name": "とはいえ" }, { "id": "to-iedomo", "name": "といえども" }] },
     { "title": "なら・たら", "points": [{ "id": "nara", "name": "なら" }, { "id": "tara", "name": "たら" }] },
+    { "title": "あります・います", "points": [{ "id": "arimasu-existence", "name": "あります" }, { "id": "imasu-existence", "name": "います" }] },
     { "title": "そうだ・ようだ", "points": [{ "id": "souda-hearsay", "name": "そうだ" }, { "id": "youda", "name": "ようだ" }] },
     { "title": "ことにする・ことになる", "points": [{ "id": "kotonisuru", "name": "ことにする" }, { "id": "kotoninaru", "name": "ことになる" }] },
     { "title": "ばかり・ところ", "points": [{ "id": "bakari", "name": "ばかり" }, { "id": "tokoro", "name": "ところ" }] },
     { "title": "てしまう・ておく", "points": [{ "id": "teshimau", "name": "てしまう" }, { "id": "teoku", "name": "ておく" }] },
+    { "title": "をきっかけに・を機に", "points": [{ "id": "wo-kikkake-ni", "name": "をきっかけに" }, { "id": "wo-ki-ni", "name": "を機に" }] },
     { "title": "ても・のに", "points": [{ "id": "temo", "name": "ても" }, { "id": "noni", "name": "のに" }] },
     { "title": "だけ・しか～ない", "points": [{ "id": "dake", "name": "だけ" }, { "id": "shika-nai", "name": "しか～ない" }] },
-    { "title": "まで・までに", "points": [{ "id": "made", "name": "まで" }, { "id": "made-ni", "name": "までに" }] }
+    { "title": "まで・までに", "points": [{ "id": "made", "name": "まで" }, { "id": "made-ni", "name": "までに" }] },
+    { "title": "に限らず・を問わず", "points": [{ "id": "ni-kagirazu", "name": "に限らず" }, { "id": "wo-towazu", "name": "を問わず" }] },
+    { "title": "ばかりか・のみならず", "points": [{ "id": "bakari-ka", "name": "ばかりか" }, { "id": "nominarazu", "name": "のみならず" }] }
   ]
 }

@@ -1,6 +1,6 @@
 # 日本語 Daily Practice
 
-纯 HTML、CSS、JavaScript 的每日 JLPT N2 语法练习网站。每天约 5–10 分钟，重点训练助词和基础语法。无账号、后端、数据库或前端构建步骤。
+纯 HTML、CSS、JavaScript 的每日日语语法练习网站。每天约 5–10 分钟，主题从基础助词到高级表达，不限定 JLPT 等级；仍会持续复习容易混淆的基础语法。无账号、后端、数据库或前端构建步骤。
 
 ## 功能
 
@@ -30,7 +30,7 @@ scripts/generate-daily.js DeepSeek Flash 生成脚本
 .github/workflows/generate-daily.yml  每日生成并部署 Pages
 ```
 
-示例数据为 2026-09-21 至 2026-09-25，其中 23–25 日分别练习「はず・つもり」「と・たら」「しか～ない・だけ・は」。
+初始示例数据为 2026-09-21 至 2026-09-25，其中 23–25 日分别练习「はず・つもり」「と・たら」「しか～ない・だけ・は」。2026-09-26 的「から・ので」已通过自动流程生成。已有内容保留原样；新主题从初级到高级轮换。
 
 ## 本地预览与检查
 
@@ -44,7 +44,7 @@ node scripts/serve.js
 
 打开 `http://127.0.0.1:8000/`；也可以打开 `http://127.0.0.1:8000/jlpt-n2-daily/` 测试 GitHub Pages 子路径。直接以 `file://` 打开时，浏览器通常不允许页面读取 JSON。
 
-可在浏览器控制台执行 `localStorage.getItem('n2-progress-v2')` 查看保存的数据。清除记录入口在左侧导航底部。
+可在浏览器控制台执行 `localStorage.getItem('n2-progress-v2')` 查看保存的数据。这个存储名称沿用旧版，以保留已有答题记录。清除记录入口在左侧导航底部。
 
 ## 新增每日内容
 
@@ -84,7 +84,7 @@ JSON 顶层字段：
 
    ```bash
    git add .
-   git commit -m "Build daily N2 practice MVP"
+   git commit -m "Build daily Japanese practice site"
    git remote add origin https://github.com/<用户名>/<仓库名>.git
    git push -u origin main
    ```
@@ -100,10 +100,10 @@ JSON 顶层字段：
 自动生成使用 DeepSeek 官方 `deepseek-flash` 模型的 Chat Completions JSON 模式。配置步骤：
 
 1. 在 DeepSeek 官方平台创建 API Key。到仓库 **Settings → Secrets and variables → Actions → New repository secret**，名称填 `DEEPSEEK_API_KEY`，值填密钥。**不要把密钥写进代码、JSON、网页或聊天消息。**调用模型可能产生 API 费用。
-2. 在 GitHub **Actions → Generate daily N2 practice → Run workflow** 手动运行一次。当天已有练习会跳过；当前示例覆盖至 2026-09-25，可在日期输入框填 `2026-09-26` 测试首个自动生成日。
+2. 在 GitHub **Actions → Generate daily Japanese practice → Run workflow** 手动运行一次。当天已有练习会跳过；如要测试生成，请在日期输入框填入下一未发布的日期。
 3. 查看运行日志及生成的 JSON。脚本会拒绝缺字段、缺复习候选题、无 ruby 注音等结构错误；生成内容仍建议人工阅读，尤其核对日语自然度与答案。校验失败时不会提交或发布。
 
-工作流计划在每天 **Asia/Shanghai 18:15** 生成当天练习。GitHub 定时工作流可能延迟，不能保证恰好在 19:00 提醒前完成。若日期文件已存在，工作流会跳过，不覆盖手工编辑的练习；2026-09-26 起按 `data/topics.json` 轮换主题。首次启用后留意 [GitHub Actions](https://github.com/KhaosZen/jlpt-n2-daily/actions) 的运行结果。
+工作流计划在每天 **Asia/Shanghai 18:15** 生成当天练习。GitHub 定时工作流可能延迟，不能保证恰好在 19:00 提醒前完成。若日期文件已存在，工作流会跳过，不覆盖手工编辑的练习；2026-09-26 起按 `data/topics.json` 轮换初级至高级的主题，难度随当天主题变化。可直接编辑该文件调整后续主题；已有日期的练习不会被覆盖。首次启用后留意 [GitHub Actions](https://github.com/KhaosZen/jlpt-n2-daily/actions) 的运行结果。
 
 流程为：GitHub Actions 定时触发 → 调用 DeepSeek Flash → 生成当天 JSON 和索引 → 验证 → 提交 → **同一次工作流**部署 GitHub Pages。由 `GITHUB_TOKEN` 推送的提交不会再触发普通 `push` 工作流，因此生成工作流自行部署；参见 [GitHub Actions 触发规则](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)。DeepSeek 的 [JSON 模式说明](https://api-docs.deepseek.com/guides/json_mode/)解释了 API 格式和空输出的可能性。
 

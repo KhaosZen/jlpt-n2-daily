@@ -44,8 +44,8 @@ function planForDate(date, index = readJSON("index.json"), curriculum = readJSON
 
 function promptForPlan(plan) {
   return {
-    system: `你是严谨的 JLPT N2 日语教师，擅长帮助中文母语学习者巩固助词与基础语法。只输出一个合法 JSON 对象，不要 Markdown。所有题目都必须有唯一且无歧义的最佳答案；详细解释其他选项为什么在该语境错误或不自然。日语例句要自然实用，日文汉字逐词加 漢字{かんじ} 注音，中文说明不要加注音。不要编造语法规则。`,
-    user: `请为 ${plan.date} 生成一份 5–10 分钟练习，主题「${plan.topic.title}」。
+    system: `你是严谨的日语教师，面向中文母语学习者设计从初级到高级的语法练习，不限定 JLPT 等级。根据当天主题的实际难度出题，持续巩固助词和基础语法，也练习中高级表达。只输出一个合法 JSON 对象，不要 Markdown。所有题目都必须有唯一且无歧义的最佳答案；详细解释其他选项为什么在该语境错误或不自然。日语例句要自然实用，日文汉字逐词加 漢字{かんじ} 注音，中文说明不要加注音。不要编造语法规则。`,
+    user: `请为 ${plan.date} 生成一份 5–10 分钟练习，主题「${plan.topic.title}」。题目难度以主题为准，不要统一压到 N2；讲解要让约 N2 水平、但基础不够扎实的学习者也能理解。
 主知识点 ID 和名称：${JSON.stringify(plan.topic.points)}。
 复习候选知识点（保持这些稳定 ID）：${JSON.stringify(plan.reviewPoints)}。
 输出 JSON 字段严格如下：

@@ -2,7 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { todayShanghai, planForDate, requestDeepSeek, verifyPlan } = require("./generate-daily.js");
+const { todayShanghai, planForDate, promptForPlan, requestDeepSeek, verifyPlan } = require("./generate-daily.js");
 
 test("uses the Shanghai calendar date across UTC midnight", () => {
   assert.equal(todayShanghai(new Date("2026-09-25T16:30:00Z")), "2026-09-26");
@@ -13,6 +13,14 @@ test("builds a rotating topic and review pool from earlier lessons", () => {
   assert.equal(plan.topic.title, "から・ので");
   assert.ok(plan.reviewPoints.length >= 2);
   assert.ok(!plan.reviewPoints.some(point => plan.topic.points.some(main => main.id === point.id)));
+});
+
+test("rotates through beginner and advanced grammar without an N2-only generation rule", () => {
+  assert.equal(planForDate("2026-09-27").topic.title, "ている・てある");
+  assert.equal(planForDate("2026-10-03").topic.title, "とはいえ・といえども");
+  const prompts = promptForPlan(planForDate("2026-10-03"));
+  assert.match(prompts.system, /不限定 JLPT 等级/);
+  assert.match(prompts.user, /题目难度以主题为准/);
 });
 
 test("sends DeepSeek Flash JSON request with the key only in the authorization header", async () => {

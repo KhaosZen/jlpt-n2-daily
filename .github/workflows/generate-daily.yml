@@ -1,4 +1,4 @@
-name: Generate daily N2 practice
+name: Generate daily Japanese practice
 
 on:
   schedule:
@@ -50,7 +50,7 @@ jobs:
           else
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -m "Add daily N2 practice"
+            git commit -m "Add daily Japanese practice"
             git push origin HEAD:main
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
