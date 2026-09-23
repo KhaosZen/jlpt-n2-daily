@@ -1,105 +1,295 @@
-const state = { index: [], current: null, view: "today", mistakes: loadMistakes() };
+"use strict";
+
+const TIME_ZONE = "Asia/Shanghai";
+const STORAGE_KEY = "n2-progress-v2";
 const $ = (selector) => document.querySelector(selector);
-const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
-// Lesson copy uses 漢字{かんじ}; build ruby nodes without injecting HTML from JSON.
-function rubyEl(tag, className, source) {
-  const node = el(tag, className);
+const state = { lessons: [], current: null, progress: loadProgress(), today: todayInTimeZone() };
+
+function emptyProgress() {
+  return { version: 2, completedDates: {}, attempts: {}, grammarStats: {} };
+}
+
+function loadProgress() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (saved?.version === 2 && saved.completedDates && saved.attempts && saved.grammarStats) return saved;
+  } catch { /* Damaged or unavailable storage starts a fresh local record. */ }
+  return emptyProgress();
+}
+
+function saveProgress() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state.progress)); }
+  catch { showStatus("浏览器未允许保存学习记录；本次答题仍可继续。", false); }
+}
+
+function todayInTimeZone(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit"
+  }).formatToParts(date);
+  const part = (type) => parts.find(item => item.type === type).value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+function node(tag, className, text) {
+  const element = document.createElement(tag);
+  if (className) element.className = className;
+  if (text !== undefined) element.textContent = text;
+  return element;
+}
+
+// JSON uses 漢字{かんじ}; only explicit annotations become ruby elements.
+function richNode(tag, className, source) {
+  const element = node(tag, className);
+  const text = String(source ?? "");
   const pattern = /([\u3400-\u9fff々〆ヶ]+)\{([ぁ-んァ-ヶー]+)\}/g;
   let cursor = 0;
-  for (const match of String(source).matchAll(pattern)) {
-    node.append(document.createTextNode(source.slice(cursor, match.index)));
+  for (const match of text.matchAll(pattern)) {
+    element.append(document.createTextNode(text.slice(cursor, match.index)));
     const ruby = document.createElement("ruby");
-    ruby.append(document.createTextNode(match[1]), el("rp", "", "("), el("rt", "", match[2]), el("rp", "", ")"));
-    node.append(ruby);
+    ruby.append(document.createTextNode(match[1]), node("rp", "", "("), node("rt", "", match[2]), node("rp", "", ")"));
+    element.append(ruby);
     cursor = match.index + match[0].length;
   }
-  node.append(document.createTextNode(source.slice(cursor)));
-  return node;
+  element.append(document.createTextNode(text.slice(cursor)));
+  return element;
 }
 
-function loadMistakes() { try { return JSON.parse(localStorage.getItem("n2-mistakes-v1")) || {}; } catch { return {}; } }
-function saveMistakes() { localStorage.setItem("n2-mistakes-v1", JSON.stringify(state.mistakes)); updateCount(); }
-function updateCount() { const count = Object.keys(state.mistakes).length; $("#review-count").textContent = count; $("#review-count").hidden = count === 0; }
-function showStatus(message) { $("#status").textContent = message; $("#status").hidden = false; }
+function plainJapanese(text) {
+  return String(text).replace(/([\u3400-\u9fff々〆ヶ]+)\{[ぁ-んァ-ヶー]+\}/g, "$1");
+}
+
+function normalizedAnswer(text) {
+  return plainJapanese(text).trim().replace(/[\s\u3000]+/g, "").replace(/[。．.!！?？]+$/, "");
+}
+
+function formatDate(date) { return date.replaceAll("-", "/"); }
+function showStatus(message, loading = true) { $("#status").textContent = message; $("#status").hidden = false; $("#status").dataset.loading = String(loading); }
 function hideStatus() { $("#status").hidden = true; }
-function setActive(view) { document.querySelectorAll(".nav-item").forEach(node => node.classList.toggle("active", node.dataset.view === view)); document.querySelectorAll(".history-item").forEach(node => node.classList.toggle("active", view === "lesson" && node.dataset.date === state.current?.date)); }
 
-async function getJSON(path) { const response = await fetch(path, { cache: "no-store" }); if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); }
-
-async function showLesson(date, view = "lesson") {
-  state.view = view;
-  $("#review-view").hidden = true; $("#lesson-view").hidden = true;
-  showStatus("正在加载练习…");
-  try {
-    const lesson = await getJSON(`./data/${date}.json`);
-    if (!Array.isArray(lesson.questions) || !Array.isArray(lesson.points)) throw new Error("练习数据格式有误");
-    state.current = lesson;
-    renderLesson(lesson);
-    setActive(view);
-    hideStatus(); $("#lesson-view").hidden = false;
-    if (view === "lesson") history.replaceState(null, "", `#${date}`); else history.replaceState(null, "", location.pathname + location.search);
-  } catch (error) { showStatus(`练习暂时无法加载：${error.message}。请确认文件齐全，并通过本地服务器或 GitHub Pages 打开网页。`); }
+async function getJSON(path) {
+  const response = await fetch(path, { cache: "no-store" });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
 }
 
-function renderLesson(lesson) {
-  $("#hero-date").textContent = lesson.date;
-  $("#hero-duration").textContent = lesson.duration || "约 10 分钟";
-  $("#hero-kicker").textContent = lesson.kicker || "TODAY'S GRAMMAR";
-  $("#hero-title").textContent = lesson.title;
-  $("#hero-subtitle").textContent = lesson.subtitle;
-  const tags = $("#hero-tags"); tags.replaceChildren(...lesson.tags.map(tag => el("span", "tag", tag)));
-  const points = $("#lesson-points"); points.replaceChildren(...lesson.points.map((point, i) => {
-    const card = el("article", "point"); card.append(el("p", "point-label", `POINT ${String(i+1).padStart(2,"0")}`), el("h3", "", point.term), el("p", "", point.meaning), rubyEl("p", "point-example", point.example)); return card;
-  }));
-  $("#question-progress").textContent = `共 ${lesson.questions.length} 题`;
-  $("#questions").replaceChildren(...lesson.questions.map((question, i) => renderQuestion(question, i, lesson)));
-  $("#takeaway").replaceChildren(el("p", "", lesson.takeaway), rubyEl("small", "", lesson.takeawayNote || ""));
-}
-
-function renderQuestion(question, index, lesson) {
-  const card = el("article", "question-card");
-  const top = el("div", "question-top"); top.append(el("span", "", `QUESTION ${String(index+1).padStart(2,"0")}`), el("span", "", question.tag || "语法选择")); card.append(top);
-  card.append(el("p", "question-prompt", question.prompt), rubyEl("p", "question-jp", question.sentence));
-  const choices = el("div", "choices"); const feedback = el("span", "feedback"); const answer = el("div", "answer"); answer.hidden = true;
-  const answerLabel = rubyEl("strong", "", `答案：${question.options[question.answer]}`); answer.append(answerLabel, rubyEl("p", "", question.explanation));
-  question.options.forEach((option, choiceIndex) => {
-    const button = rubyEl("button", "choice", `${String.fromCharCode(65+choiceIndex)}. ${option}`); button.type = "button";
-    button.addEventListener("click", () => {
-      choices.querySelectorAll("button").forEach((item, i) => { item.classList.toggle("selected", i === choiceIndex); item.classList.toggle("correct", i === question.answer); item.classList.toggle("incorrect", i === choiceIndex && i !== question.answer); });
-      answer.hidden = false; toggle.textContent = "收起解析"; toggle.setAttribute("aria-expanded", "true");
-      const correct = choiceIndex === question.answer;
-      feedback.className = `feedback ${correct ? "good" : "bad"}`;
-      feedback.textContent = correct ? "答对了 ✓" : "再记住这个区别";
-      if (!correct) { state.mistakes[`${lesson.date}:${question.id}`] = { date: lesson.date, id: question.id, title: lesson.title, prompt: question.prompt, sentence: question.sentence, answer: question.options[question.answer], explanation: question.explanation }; saveMistakes(); review.textContent = "已加入复习 ✓"; }
-    }); choices.append(button);
-  }); card.append(choices);
-  const actions = el("div", "question-actions"); const toggle = el("button", "answer-toggle", "查看答案与解析"); toggle.type = "button"; toggle.setAttribute("aria-expanded", "false");
-  toggle.addEventListener("click", () => { answer.hidden = !answer.hidden; toggle.textContent = answer.hidden ? "查看答案与解析" : "收起解析"; toggle.setAttribute("aria-expanded", String(!answer.hidden)); });
-  const review = el("button", "review-toggle", state.mistakes[`${lesson.date}:${question.id}`] ? "已加入复习 ✓" : "加入复习"); review.type = "button";
-  review.addEventListener("click", () => { const key = `${lesson.date}:${question.id}`; if (state.mistakes[key]) { delete state.mistakes[key]; review.textContent = "加入复习"; } else { state.mistakes[key] = { date: lesson.date, id: question.id, title: lesson.title, prompt: question.prompt, sentence: question.sentence, answer: question.options[question.answer], explanation: question.explanation }; review.textContent = "已加入复习 ✓"; } saveMistakes(); });
-  actions.append(toggle, feedback, review); card.append(actions, answer); return card;
+function todayLesson() {
+  return state.lessons.find(item => item.date === state.today)
+    || state.lessons.find(item => item.date < state.today)
+    || state.lessons[0];
 }
 
 function renderHistory() {
-  $("#history-count").textContent = `${Math.max(0, state.index.length-1)} 天`;
-  $("#history-list").replaceChildren(...state.index.slice(1).map(item => { const button = el("button", "history-item"); button.type = "button"; button.dataset.date = item.date; button.append(el("span", "history-date", item.date.slice(5).replace("-", "/")), el("span", "history-title", item.title)); button.addEventListener("click", () => showLesson(item.date)); return button; }));
+  $("#history-count").textContent = `${state.lessons.length} 天`;
+  $("#history-list").replaceChildren(...state.lessons.map(item => {
+    const button = node("button", "history-item");
+    button.type = "button";
+    button.dataset.date = item.date;
+    const completed = Boolean(state.progress.completedDates[item.date]);
+    button.append(node("span", "history-date", item.date.slice(5).replace("-", "/")),
+      node("span", "history-title", item.title),
+      node("span", "history-state", completed ? "✓ 已完成" : "未完成"));
+    button.classList.toggle("active", state.current?.date === item.date);
+    button.addEventListener("click", () => openLesson(item.date, false));
+    return button;
+  }));
 }
 
-async function showReview() {
-  state.view = "review"; $("#lesson-view").hidden = true; $("#review-view").hidden = false; hideStatus(); setActive("review"); history.replaceState(null, "", "#review");
-  const entries = Object.entries(state.mistakes).sort((a,b) => b[1].date.localeCompare(a[1].date));
-  const lessons = await Promise.all([...new Set(entries.map(([,item]) => item.date))].map(async date => {
-    try { return [date, await getJSON(`./data/${date}.json`)]; } catch { return [date, null]; }
+function recordAttempt(exercise, answer, isCorrect) {
+  const date = state.current.date;
+  const attempts = state.progress.attempts[date] ||= {};
+  const previous = attempts[exercise.id];
+  if (previous && previous.answer === answer && previous.isCorrect === isCorrect) return;
+  if (previous) {
+    for (const point of previous.grammarPoints) {
+      const stats = state.progress.grammarStats[point];
+      if (stats) { stats.attempts = Math.max(0, stats.attempts - 1); if (!previous.isCorrect) stats.errors = Math.max(0, stats.errors - 1); }
+    }
+  }
+  for (const point of exercise.grammar_points) {
+    const stats = state.progress.grammarStats[point] ||= { attempts: 0, errors: 0 };
+    stats.attempts++;
+    if (!isCorrect) stats.errors++;
+  }
+  attempts[exercise.id] = { answer, isCorrect, grammarPoints: [...exercise.grammar_points], updatedAt: new Date().toISOString() };
+  saveProgress();
+  updateCompletion();
+}
+
+function updateCompletion() {
+  if (!state.current) return;
+  const attempts = state.progress.attempts[state.current.date] || {};
+  const done = state.current.exercises.filter(item => typeof attempts[item.id]?.isCorrect === "boolean").length;
+  const total = state.current.exercises.length;
+  $("#question-progress").textContent = `${done}/${total} 题已记录`;
+  const completed = Boolean(state.progress.completedDates[state.current.date]);
+  $("#complete-button").disabled = done !== total || completed;
+  $("#complete-button").textContent = completed ? "✓ 已完成" : "今日の練習を完了";
+  $("#completion-hint").textContent = completed ? "学习记录已保存到当前浏览器。" : done === total ? "全部题目已记录，可以完成今天的练习。" : `还差 ${total - done} 题。查看答案后记录答题结果。`;
+  renderHistory();
+}
+
+function renderExercise(exercise, index) {
+  const card = node("article", "question-card");
+  const top = node("div", "question-top");
+  const typeLabel = { multiple_choice: "选择题", fill_blank: "填空题", rewrite: "改写题" }[exercise.type];
+  top.append(node("span", "", `QUESTION ${String(index + 1).padStart(2, "0")}`), node("span", "", typeLabel));
+  card.append(top, node("p", "question-prompt", exercise.prompt));
+  if (exercise.jp) card.append(richNode("p", "question-jp", exercise.jp));
+  if (exercise.source) card.append(richNode("p", "rewrite-source", exercise.source));
+
+  const old = state.progress.attempts[state.current.date]?.[exercise.id];
+  let selected = exercise.type === "multiple_choice" ? exercise.options.indexOf(old?.answer) : -1;
+  let input = null;
+  let choices = null;
+  if (exercise.type === "multiple_choice") {
+    choices = node("div", "choices");
+    exercise.options.forEach((option, optionIndex) => {
+      const button = richNode("button", "choice", `${String.fromCharCode(65 + optionIndex)}. ${option}`);
+      button.type = "button";
+      button.setAttribute("aria-pressed", String(optionIndex === selected));
+      button.classList.toggle("selected", optionIndex === selected);
+      button.addEventListener("click", () => {
+        selected = optionIndex;
+        choices.querySelectorAll("button").forEach((choice, i) => {
+          choice.classList.toggle("selected", i === selected);
+          choice.setAttribute("aria-pressed", String(i === selected));
+        });
+        if (!answer.hidden) grade();
+      });
+      choices.append(button);
+    });
+    card.append(choices);
+  } else {
+    const label = node("label", "input-label", exercise.type === "rewrite" ? "你的改写句子" : "请填入空格中的词");
+    input = node("input", "answer-input");
+    input.type = "text";
+    input.autocomplete = "off";
+    input.id = `answer-${state.current.date}-${exercise.id}`;
+    input.value = old?.answer || "";
+    label.htmlFor = input.id;
+    card.append(label, input);
+    input.addEventListener("change", () => { if (!answer.hidden && input.value.trim()) grade(); });
+  }
+
+  const actions = node("div", "question-actions");
+  const toggle = node("button", "answer-toggle", "答えを見る");
+  const feedback = node("span", "feedback", old ? (old.isCorrect ? "已记录：正确" : "已记录：需复习") : "");
+  const answer = node("div", "answer");
+  answer.id = `solution-${state.current.date}-${exercise.id}`;
+  answer.hidden = true;
+  toggle.type = "button";
+  toggle.setAttribute("aria-controls", answer.id);
+  toggle.setAttribute("aria-expanded", "false");
+  const correctText = exercise.type === "multiple_choice" ? exercise.options[exercise.answer] : exercise.answer;
+  answer.append(richNode("strong", "", `正确答案：${correctText}`), richNode("p", "", exercise.explanation), richNode("p", "", `纠错：${exercise.correction}`));
+  const selfCheck = node("div", "self-check");
+  [true, false].forEach(correct => {
+    const button = node("button", "", correct ? "我答对了" : "还需复习");
+    button.type = "button";
+    button.setAttribute("aria-pressed", String(old?.isCorrect === correct));
+    button.addEventListener("click", () => {
+      const response = currentResponse() || "（未填写）";
+      recordAttempt(exercise, response, correct);
+      setFeedback(correct);
+    });
+    selfCheck.append(button);
+  });
+  answer.append(selfCheck);
+  actions.append(toggle, feedback);
+  card.append(actions, answer);
+
+  function currentResponse() { return exercise.type === "multiple_choice" ? (selected < 0 ? "" : exercise.options[selected]) : input.value.trim(); }
+  function setFeedback(correct) {
+    feedback.textContent = correct ? "已记录：正确" : "已记录：需复习";
+    feedback.className = `feedback ${correct ? "good" : "bad"}`;
+    selfCheck.querySelectorAll("button").forEach((button, i) => button.setAttribute("aria-pressed", String((i === 0) === correct)));
+  }
+  function grade() {
+    const response = currentResponse();
+    if (!response) return;
+    const accepted = exercise.type === "multiple_choice" ? [exercise.options[exercise.answer]] : [exercise.answer, ...(exercise.accepted_answers || [])];
+    const correct = accepted.some(item => normalizedAnswer(item) === normalizedAnswer(response));
+    recordAttempt(exercise, response, correct);
+    setFeedback(correct);
+  }
+  toggle.addEventListener("click", () => {
+    answer.hidden = !answer.hidden;
+    toggle.textContent = answer.hidden ? "答えを見る" : "答えを隠す";
+    toggle.setAttribute("aria-expanded", String(!answer.hidden));
+    if (!answer.hidden) grade();
+  });
+  return card;
+}
+
+function renderLesson(lesson) {
+  $("#hero-date").textContent = formatDate(lesson.date);
+  $("#hero-duration").textContent = `约 ${lesson.duration_minutes} 分钟`;
+  $("#hero-title").textContent = lesson.title;
+  $("#hero-summary").textContent = lesson.summary;
+  const reviewNames = lesson.review_points.map(id => lesson.grammar_points.find(point => point.id === id)?.name || id);
+  $("#lesson-explanation").textContent = lesson.explanation + (reviewNames.length ? ` 本期复习：${reviewNames.join("、")}。` : "");
+  $("#grammar-points").replaceChildren(...lesson.grammar_points.map((point, i) => {
+    const card = node("article", "point");
+    card.append(node("p", "point-label", `POINT ${String(i + 1).padStart(2, "0")}`),
+      node("h3", "", point.name), node("p", "", point.explanation));
+    return card;
   }));
-  if (state.view !== "review") return;
-  const byDate = new Map(lessons);
-  $("#review-items").replaceChildren(...(entries.length ? entries.map(([key,item]) => { const current = byDate.get(item.date)?.questions?.find(question => question.id === item.id); const display = current ? { ...item, sentence: current.sentence, answer: current.options[current.answer], explanation: current.explanation } : item; const card = el("article", "review-card"); card.append(el("div", "question-top", `${display.date} · ${display.title}`), el("h3", "", display.prompt), rubyEl("p", "", display.sentence), rubyEl("p", "", `答案：${display.answer}。${display.explanation}`)); const done = el("button", "", "已掌握 · 移出复习"); done.type = "button"; done.addEventListener("click", () => { delete state.mistakes[key]; saveMistakes(); showReview(); }); card.append(done); return card; }) : [el("div", "empty-review", "这里还没有错题。答错或点击「加入复习」后，就能在这里回顾。")]));
+  $("#examples").replaceChildren(...lesson.examples.map(example => {
+    const card = node("article", "example");
+    card.append(richNode("p", "example-jp", example.jp), node("p", "example-zh", example.zh));
+    return card;
+  }));
+  $("#exercises").replaceChildren(...lesson.exercises.map(renderExercise));
+  updateCompletion();
+}
+
+async function openLesson(date, asToday) {
+  showStatus("正在加载练习…");
+  $("#lesson-view").hidden = true;
+  try {
+    const lesson = await getJSON(`./data/${date}.json`);
+    state.current = lesson;
+    renderLesson(lesson);
+    $("#today-nav").classList.toggle("active", asToday);
+    const missingToday = asToday && date !== state.today;
+    $("#today-notice").hidden = !missingToday;
+    if (missingToday) $("#today-notice").textContent = `今日の練習はまだありません。${formatDate(state.today)} 的内容尚未发布，下面显示最近一篇可用练习。`;
+    hideStatus();
+    $("#lesson-view").hidden = false;
+    history.replaceState(null, "", asToday ? location.pathname + location.search : `#${date}`);
+  } catch (error) { showStatus(`练习无法加载：${error.message}。请检查 data 文件和部署状态。`, false); }
 }
 
 async function init() {
-  updateCount();
-  document.querySelectorAll(".nav-item").forEach(button => button.addEventListener("click", () => button.dataset.view === "review" ? showReview() : showLesson(state.index[0].date, "today")));
-  try { const manifest = await getJSON("./data/index.json"); state.index = manifest.lessons; if (!Array.isArray(state.index) || !state.index.length) throw new Error("索引为空"); renderHistory(); const hash = location.hash.slice(1); if (hash === "review") showReview(); else { const found = state.index.find(item => item.date === hash); await showLesson(found?.date || state.index[0].date, found ? "lesson" : "today"); } }
-  catch (error) { showStatus(`无法读取练习索引：${error.message}。请通过本地服务器或 GitHub Pages 打开网页。`); }
+  $("#today-nav").addEventListener("click", () => openLesson(todayLesson().date, true));
+  $("#complete-button").addEventListener("click", () => {
+    if (!state.current || $("#complete-button").disabled) return;
+    state.progress.completedDates[state.current.date] = new Date().toISOString();
+    saveProgress();
+    updateCompletion();
+  });
+  const closeClear = () => { $("#clear-confirm").hidden = true; $("#clear-progress").setAttribute("aria-expanded", "false"); };
+  $("#clear-progress").addEventListener("click", () => {
+    const open = $("#clear-confirm").hidden;
+    $("#clear-confirm").hidden = !open;
+    $("#clear-progress").setAttribute("aria-expanded", String(open));
+  });
+  $("#clear-no").addEventListener("click", closeClear);
+  $("#clear-yes").addEventListener("click", () => {
+    state.progress = emptyProgress();
+    try { localStorage.removeItem(STORAGE_KEY); } catch { /* Memory state is still cleared. */ }
+    if (state.current) renderLesson(state.current);
+    renderHistory();
+    closeClear();
+  });
+  try {
+    const index = await getJSON("./data/index.json");
+    if (!Array.isArray(index.lessons) || !index.lessons.length) throw new Error("练习索引为空");
+    state.lessons = index.lessons;
+    const requested = location.hash.slice(1);
+    const archived = state.lessons.find(item => item.date === requested);
+    await openLesson(archived?.date || todayLesson().date, !archived);
+  } catch (error) { showStatus(`无法读取练习索引：${error.message}。请通过静态服务器打开网站。`, false); }
 }
+
 init();
