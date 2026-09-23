@@ -3,7 +3,8 @@
 const TIME_ZONE = "Asia/Shanghai";
 const STORAGE_KEY = "n2-progress-v2";
 const $ = (selector) => document.querySelector(selector);
-const state = { lessons: [], current: null, activeExercises: [], progress: loadProgress(), today: todayInTimeZone() };
+const state = { lessons: [], current: null, activeExercises: [], progress: loadProgress(), today: todayInTimeZone(), openMonths: new Set() };
+state.openMonths.add(state.today.slice(0, 7));
 
 function emptyProgress() {
   return { version: 2, completedDates: {}, attempts: {}, grammarStats: {}, dailySelections: {} };
@@ -83,17 +84,47 @@ function todayLesson() {
 
 function renderHistory() {
   $("#history-count").textContent = `${state.lessons.length} 天`;
-  $("#history-list").replaceChildren(...state.lessons.map(item => {
-    const button = node("button", "history-item");
-    button.type = "button";
-    button.dataset.date = item.date;
-    const completed = Boolean(state.progress.completedDates[item.date]);
-    button.append(node("span", "history-date", item.date.slice(5).replace("-", "/")),
-      node("span", "history-title", item.title),
-      node("span", "history-state", completed ? "✓ 已完成" : "未完成"));
-    button.classList.toggle("active", state.current?.date === item.date);
-    button.addEventListener("click", () => openLesson(item.date, false));
-    return button;
+  const months = new Map();
+  for (const item of state.lessons) {
+    const month = item.date.slice(0, 7);
+    if (!months.has(month)) months.set(month, []);
+    months.get(month).push(item);
+  }
+  $("#history-list").replaceChildren(...[...months].map(([month, lessons]) => {
+    const group = node("div", "history-month");
+    const toggle = node("button", "month-toggle");
+    const panel = node("div", "month-lessons");
+    toggle.type = "button";
+    toggle.id = `month-toggle-${month}`;
+    toggle.setAttribute("aria-controls", `month-lessons-${month}`);
+    toggle.setAttribute("aria-expanded", String(state.openMonths.has(month)));
+    toggle.append(node("span", "month-label", `${month.slice(0, 4)}年${month.slice(5)}月`),
+      node("span", "month-count", `${lessons.length} 天`));
+    panel.id = `month-lessons-${month}`;
+    panel.setAttribute("aria-labelledby", toggle.id);
+    panel.hidden = !state.openMonths.has(month);
+    panel.append(...lessons.map(item => {
+      const button = node("button", "history-item");
+      button.type = "button";
+      button.dataset.date = item.date;
+      const completed = Boolean(state.progress.completedDates[item.date]);
+      button.setAttribute("aria-label", `${formatDate(item.date)} ${item.title} ${completed ? "已完成" : "未完成"}`);
+      button.append(node("span", "history-date", item.date.slice(5).replace("-", "/")),
+        node("span", "history-title", item.title),
+        node("span", "history-state", completed ? "✓ 已完成" : "未完成"));
+      button.classList.toggle("active", state.current?.date === item.date);
+      button.addEventListener("click", () => openLesson(item.date, false));
+      return button;
+    }));
+    toggle.addEventListener("click", () => {
+      const open = !state.openMonths.has(month);
+      if (open) state.openMonths.add(month);
+      else state.openMonths.delete(month);
+      toggle.setAttribute("aria-expanded", String(open));
+      panel.hidden = !open;
+    });
+    group.append(toggle, panel);
+    return group;
   }));
 }
 
@@ -255,6 +286,7 @@ function renderLesson(lesson) {
 }
 
 async function openLesson(date, asToday) {
+  if (!state.lessons.some(item => item.date === date)) return;
   showStatus("正在加载练习…");
   $("#lesson-view").hidden = true;
   try {
@@ -272,7 +304,10 @@ async function openLesson(date, asToday) {
 }
 
 async function init() {
-  $("#today-nav").addEventListener("click", () => openLesson(todayLesson().date, true));
+  $("#today-nav").addEventListener("click", () => {
+    const lesson = todayLesson();
+    if (lesson) openLesson(lesson.date, true);
+  });
   $("#complete-button").addEventListener("click", () => {
     if (!state.current || $("#complete-button").disabled) return;
     state.progress.completedDates[state.current.date] = new Date().toISOString();
@@ -296,7 +331,14 @@ async function init() {
   try {
     const index = await getJSON("./data/index.json");
     if (!Array.isArray(index.lessons) || !index.lessons.length) throw new Error("练习索引为空");
-    state.lessons = index.lessons;
+    state.lessons = index.lessons.filter(item => item.date <= state.today);
+    if (!state.lessons.length) {
+      renderHistory();
+      $("#today-nav").disabled = true;
+      history.replaceState(null, "", location.pathname + location.search);
+      showStatus("目前还没有可用的练习，请稍后再来。", false);
+      return;
+    }
     const requested = location.hash.slice(1);
     const archived = state.lessons.find(item => item.date === requested);
     await openLesson(archived?.date || todayLesson().date, !archived);
