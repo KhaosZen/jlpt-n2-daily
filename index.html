@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f2e9">
+  <meta name="description" content="每天十分钟，练习 JLPT N2 核心语法与助词。">
+  <title>每日 N2 · 日语语法练习</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script defer src="./app.js"></script>
+</head>
+<body>
+  <div class="site-shell">
+    <header class="site-header">
+      <a class="brand" href="./" aria-label="每日 N2 首页"><span class="brand-mark">日</span><span>每日 N2 <small>DAILY PRACTICE</small></span></a>
+      <span class="header-note">每天十分钟 · 稳稳向前</span>
+    </header>
+
+    <main class="layout">
+      <aside class="sidebar" aria-label="练习导航">
+        <div class="sidebar-top"><span class="eyebrow">YOUR STUDY DESK</span><h2>学习桌</h2><p>一点一点，把语法练熟。</p></div>
+        <nav class="main-nav" aria-label="页面导航">
+          <button class="nav-item active" type="button" data-view="today"><span>✦</span> 今日练习</button>
+          <button class="nav-item" type="button" data-view="review"><span>↺</span> 错题复习 <span id="review-count" class="count" hidden>0</span></button>
+        </nav>
+        <div class="history-head"><h3>历史练习</h3><span id="history-count"></span></div>
+        <nav id="history-list" class="history-list" aria-label="历史日期"></nav>
+        <p class="sidebar-foot">学过的内容会一直留在这里。<br>错题仅保存在当前浏览器。</p>
+      </aside>
+
+      <div class="content">
+        <div id="status" class="status" role="status" aria-live="polite">正在加载练习…</div>
+        <section id="lesson-view" hidden>
+          <div class="hero">
+            <div class="hero-copy"><div class="hero-meta"><span id="hero-date"></span><span class="dot">·</span><span id="hero-duration"></span></div><p id="hero-kicker" class="hero-kicker"></p><h1 id="hero-title"></h1><p id="hero-subtitle" class="hero-subtitle"></p><div id="hero-tags" class="tags"></div></div>
+            <div class="hero-art" aria-hidden="true"><span>日本語</span><i>毎日、少しずつ。</i></div>
+          </div>
+
+          <section class="section-block" aria-labelledby="learn-heading"><div class="section-title"><span class="section-index">01</span><div><p class="eyebrow">LEARN</p><h2 id="learn-heading">今日重点</h2></div></div><div id="lesson-points" class="points"></div></section>
+          <section class="section-block" aria-labelledby="practice-heading"><div class="section-title"><span class="section-index">02</span><div><p class="eyebrow">PRACTICE</p><h2 id="practice-heading">开始练习</h2></div><span id="question-progress" class="section-aside"></span></div><div id="questions" class="questions"></div></section>
+          <section class="section-block" aria-labelledby="recap-heading"><div class="section-title"><span class="section-index">03</span><div><p class="eyebrow">TAKEAWAY</p><h2 id="recap-heading">记住这一句</h2></div></div><div id="takeaway" class="takeaway"></div></section>
+        </section>
+        <section id="review-view" hidden><div class="review-hero"><p class="eyebrow">REVIEW NOTEBOOK</p><h1>错题复习</h1><p>做错时加入复习，掌握后再移除。记录保存在当前浏览器。</p></div><div id="review-items"></div></section>
+      </div>
+    </main>
+    <footer class="site-footer"><span>毎日、少しずつ。</span><span>JLPT N2 Daily Practice</span></footer>
+  </div>
+</body>
+</html>
