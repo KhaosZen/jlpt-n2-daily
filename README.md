@@ -1,18 +1,18 @@
 # 日本語 Daily Practice
 
-纯 HTML、CSS、JavaScript 的每日日语语法练习网站。每天约 5–10 分钟，主题从基础助词到高级表达，不限定 JLPT 等级；仍会持续复习容易混淆的基础语法。无账号、后端、数据库或前端构建步骤。
+纯 HTML、CSS、JavaScript 的每日日语语法练习网站。每天约 5–10 分钟，主题从基础助词到高级表达，不限定 JLPT 等级；仍会持续复习容易混淆的基础语法。静态网站由 GitHub Pages 托管，学习记录可通过 Supabase Auth 和数据库跨设备同步；未登录仍可在本机使用。
 
 ## 功能
 
 - 按 **Asia/Shanghai** 时区判断“今天”，优先加载当天练习；尚未发布时明确提示并显示最近一篇已发布内容。即使未来日期的 JSON 已生成，也不会提前出现在网站或通过日期链接打开。
 - 练习列表按 `YYYY年MM月` 分组；每次打开时只展开当前月份，其他月份可手动展开，答题过程中的展开状态会保留到本次页面关闭。
 - 支持选择、填空、改写三种题型。答案默认折叠，展开后显示答案、解释和纠错。
-- 每道题的回答、正误及知识点答题次数/错误次数保存在当前浏览器 `localStorage`。全部题目记录后可标记当日完成，历史列表显示完成状态。
-- 清除学习记录需要浏览器二次确认。支持手机布局、键盘操作、浅色/深色模式。
+- 每道题的回答、正误及知识点答题次数/错误次数保存在当前浏览器 `localStorage`。邮箱登录后，题目记录、完成日期和当日复习题选择同步到同一个 Supabase 账号；首次登录自动合并本机记录。全部题目记录后可标记当日完成，历史列表显示完成状态。
+- 清除学习记录需要在页面中二次确认。支持手机布局、键盘操作、浅色/深色模式。
 - 日文汉字可在 JSON 中写成 `会社{かいしゃ}`，页面会生成 ruby 注音。只在日文内容里使用这个标记。
-- 新生成的练习包含 4 道主题题和多道复习候选题。网页根据当前浏览器的知识点错误率选出 2 道复习题，并固定当天的选择；不上传个人答题记录。
+- 新生成的练习包含 4 道主题题和多道复习候选题。网页根据知识点错误率选出 2 道复习题，并固定当天的选择；登录后跨设备沿用这一选择。
 
-学习记录不会跨设备同步。清理浏览器数据会删除进度。网站本身不会推送提醒。
+未登录时清理浏览器数据会删除本机进度。登录后清除本机缓存不会删除云端记录；退出登录会清除本机缓存，云端记录仍可在下次登录后恢复。网站本身不会推送提醒。
 
 ## 项目结构
 
@@ -21,6 +21,10 @@ index.html                页面结构
 styles.css                响应式和深色模式样式
 app.js                    加载、题型、答题和本地进度
 adaptive.js               根据本地薄弱点选复习题
+cloud-config.js           公开的 Supabase 项目 URL 和 publishable key
+cloud-sync.js             邮箱登录、本地与云端记录合并及同步
+vendor/supabase-2.117.1.js  固定版本的 Supabase 浏览器客户端
+supabase/schema.sql       学习记录表、权限和 Row Level Security
 data/index.json           已发布日期索引
 data/YYYY-MM-DD.json      每天一份练习
 data/topics.json          自动生成的主题轮换表
@@ -46,6 +50,19 @@ node scripts/serve.js
 打开 `http://127.0.0.1:8000/`；也可以打开 `http://127.0.0.1:8000/jlpt-n2-daily/` 测试 GitHub Pages 子路径。直接以 `file://` 打开时，浏览器通常不允许页面读取 JSON。
 
 可在浏览器控制台执行 `localStorage.getItem('n2-progress-v2')` 查看保存的数据。这个存储名称沿用旧版，以保留已有答题记录。清除记录入口在左侧导航底部。
+
+## 跨设备同步
+
+网站左侧的“跨设备学习记录”输入邮箱，点击“发送登录链接”，再从邮件打开链接。两台设备使用同一个邮箱登录后，会同步每题的最近一次回答、每日完成状态和自适应复习题选择。首次登录会导入该浏览器原有的本地记录；之后打开页面、切回标签页或点击“立即同步”都会获取最新记录。断网或暂时同步失败时仍可答题，记录先保存在本机，恢复连接后再同步。同一道题若在两台设备分别作答，以客户端记录的较新 `updatedAt` 为准；历史完成状态只会增加。
+
+当前项目已在关联的 Supabase 项目 `xewcvfflzxkdwjmynkjg` 建立三张表，并开启 Row Level Security。`supabase/schema.sql` 是可审查的表结构源文件；不要在同一项目重复执行建表脚本。浏览器中只有项目 URL 和 **publishable key**，可公开。不要将 `service_role`、secret key 或 DeepSeek API Key 放进网页、JSON 或仓库。账号数据由数据库策略按 `auth.uid()` 隔离。
+
+关联项目已在 Supabase Dashboard 的 **Authentication → URL Configuration** 设置：
+
+- **Site URL**：`https://khaoszen.github.io/jlpt-n2-daily/`
+- **Redirect URLs**：加入同一个完整 URL。
+
+邮箱登录使用 Supabase 默认的 magic link；邮箱 Provider 和新用户注册已启用。以上设置让邮件中的链接回到 GitHub Pages 的项目子路径。若要在本地测试邮箱登录，可额外加入本地预览地址；普通本地预览无需登录。Supabase 邮件发送有项目配额，正式长期使用时可按需配置自有 SMTP。
 
 ## 新增每日内容
 
@@ -76,7 +93,7 @@ JSON 顶层字段：
 
 `explanation` 说明正确表达的语感；`correction` 说明错误项为何错误或不自然。复习旧知识点时在本期 `grammar_points` 添加相同的稳定 ID，再在 `review_points` 标出，并给相应题目标记该 ID。日文注音用 `漢字{かんじ}`，例如 `駅{えき}に着{つ}く`。
 
-进度结构版本为 `2`，包含 `completedDates`、按日期和题目 ID 组织的 `attempts`、按知识点 ID 组织的 `grammarStats`（`attempts` 和 `errors`），以及当天固定的 `dailySelections`。旧版本 2 的记录可直接使用。复习题按 `(错误次数 + 1) / (答题次数 + 2)` 排序；没有记录时按日期稳定轮换。GitHub Actions 无法读取访问者浏览器里的数据，所以生成的是通用题库，个性化选择在浏览器内完成。
+进度结构版本为 `2`，包含 `completedDates`、按日期和题目 ID 组织的 `attempts`、按知识点 ID 组织的 `grammarStats`（`attempts` 和 `errors`），以及当天固定的 `dailySelections`。旧版本 2 的记录可直接使用。同步时根据合并后的逐题记录重新计算 `grammarStats`，避免两台设备重复累计。复习题按 `(错误次数 + 1) / (答题次数 + 2)` 排序；没有记录时按日期稳定轮换。GitHub Actions 无法读取私有学习记录，所以生成的是通用题库，个性化选择在浏览器内完成。
 
 ## 创建仓库并部署 GitHub Pages
 
@@ -108,6 +125,6 @@ JSON 顶层字段：
 
 流程为：GitHub Actions 定时触发 → 调用 DeepSeek Flash → 生成当天 JSON 和索引 → 验证 → 提交 → **同一次工作流**部署 GitHub Pages。由 `GITHUB_TOKEN` 推送的提交不会再触发普通 `push` 工作流，因此生成工作流自行部署；参见 [GitHub Actions 触发规则](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)。DeepSeek 的 [JSON 模式说明](https://api-docs.deepseek.com/guides/json_mode/)解释了 API 格式和空输出的可能性。
 
-**当前自适应范围**是从每天已生成的复习候选题中，挑选适合当前浏览器的两题。生成脚本无法读取本地 `localStorage`，因此不会为某个人单独生成全套新题。若将来要让模型直接依据个人错题生成，须先设计主动且安全的进度同步方式。
+**当前自适应范围**是从每天已生成的复习候选题中，挑选适合已同步学习记录的两题。生成脚本无法读取私有 Supabase 答题记录，因此不会为某个人单独生成全套新题。若将来要让模型直接依据个人错题生成，需要设计用户授权的数据流和服务端凭据保护。
 
 职责分工：**GitHub Pages** 承载练习；**GitHub Actions** 发布每日内容；**ChatGPT Scheduled Task** 每天 19:00 提醒“今日の日本語練習が用意できました。”，未来可附上站点地址。网站本身不发送提醒。

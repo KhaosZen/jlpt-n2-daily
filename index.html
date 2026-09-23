@@ -6,9 +6,12 @@
   <meta name="theme-color" content="#f5f2e9">
   <meta name="description" content="每天 5～10 分钟，练习从基础到高级的日语助词与语法。">
   <title>日本語 Daily Practice · 每日语法练习</title>
-  <link rel="stylesheet" href="./styles.css?v=4">
+  <link rel="stylesheet" href="./styles.css?v=5">
   <script defer src="./adaptive.js?v=3"></script>
-  <script defer src="./app.js?v=4"></script>
+  <script defer src="./vendor/supabase-2.117.1.js"></script>
+  <script defer src="./cloud-config.js"></script>
+  <script defer src="./cloud-sync.js"></script>
+  <script defer src="./app.js?v=5"></script>
 </head>
 <body>
   <div class="site-shell">
@@ -25,7 +28,13 @@
         </nav>
         <div class="history-head"><h3>练习列表</h3><span id="history-count"></span></div>
         <nav id="history-list" class="history-list" aria-label="历史练习"></nav>
-        <div class="sidebar-foot"><p>学习记录仅保存在当前浏览器。</p><button id="clear-progress" class="text-button" type="button" aria-expanded="false" aria-controls="clear-confirm">清除本地学习记录</button><div id="clear-confirm" class="clear-confirm" hidden><p>确定清除全部学习记录吗？此操作无法撤销。</p><div><button id="clear-yes" type="button">确定清除</button><button id="clear-no" type="button">取消</button></div></div></div>
+        <section class="sync-panel" aria-labelledby="sync-heading">
+          <h3 id="sync-heading">跨设备学习记录</h3>
+          <p id="sync-status" role="status" aria-live="polite">正在检查登录状态…</p>
+          <form id="login-form" hidden><label for="login-email">邮箱</label><input id="login-email" type="email" autocomplete="email" required placeholder="you@example.com"><button type="submit">发送登录链接</button></form>
+          <div id="signed-in-actions" hidden><button id="sync-now" type="button">立即同步</button><button id="sign-out" type="button">退出登录</button></div>
+        </section>
+        <div class="sidebar-foot"><p id="storage-note">未登录时，学习记录保存在当前浏览器。</p><button id="clear-progress" class="text-button" type="button" aria-expanded="false" aria-controls="clear-confirm">清除本地学习记录</button><div id="clear-confirm" class="clear-confirm" hidden><p>确定清除当前设备的学习记录吗？云端记录不会删除，登录后会重新同步。</p><div><button id="clear-yes" type="button">确定清除</button><button id="clear-no" type="button">取消</button></div></div></div>
       </aside>
 
       <div class="content">

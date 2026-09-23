@@ -41,8 +41,9 @@ jobs:
       - name: Prepare static site
         run: |
           mkdir _site
-          cp index.html styles.css adaptive.js app.js _site/
+          cp index.html styles.css adaptive.js app.js cloud-config.js cloud-sync.js _site/
           cp -R data _site/
+          cp -R vendor _site/
       - uses: actions/upload-pages-artifact@v4
         with:
           path: _site

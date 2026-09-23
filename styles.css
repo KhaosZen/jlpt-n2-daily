@@ -55,9 +55,16 @@ rt { color: var(--muted); font-size: .58em; font-weight: 500; }
 .history-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .history-state { flex: 0 0 auto; color: var(--green); font-size: 11px; }
 .sidebar-foot { margin: 28px 12px; }
+.sync-panel { margin: 27px 0 0; padding: 15px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+.sync-panel h3 { margin: 0 0 5px; font-size: 13px; }
+.sync-panel p { margin: 0 0 9px; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.sync-panel label { display: block; color: var(--muted); font-size: 11px; }
+.sync-panel input { width: 100%; margin: 4px 0 8px; padding: 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--card); color: var(--ink); font-size: 12px; }
+.sync-panel button { margin: 0 5px 5px 0; padding: 7px 9px; border: 1px solid var(--green); border-radius: 7px; background: var(--soft); color: var(--green); font-size: 11px; font-weight: 700; }
+.sync-panel button:disabled { opacity: .5; cursor: wait; }
 .text-button { padding: 0; border: 0; background: transparent; color: var(--muted); text-decoration: underline; font-size: 11px; }
 .text-button:hover { color: var(--accent); }
-.clear-confirm { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font-size: 12px; }
+.clear-confirm { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); font-size: 12px; }
 .clear-confirm p { margin: 0 0 10px; }
 .clear-confirm div { display: flex; gap: 8px; }
 .clear-confirm button { padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--ink); font: inherit; }
@@ -139,6 +146,7 @@ rt { color: var(--muted); font-size: .58em; font-weight: 500; }
   .history-list { gap: 7px; }
   .month-lessons { max-height: 260px; overflow-y: auto; }
   .history-item { border: 1px solid var(--line); background: var(--card); }
+  .sync-panel { margin-top: 16px; }
   .sidebar-foot { margin: 15px 2px 21px; }
   .content { margin-top: 18px; }
   .hero { display: block; }

@@ -24,6 +24,7 @@ function loadProgress() {
 function saveProgress() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state.progress)); }
   catch { showStatus("浏览器未允许保存学习记录；本次答题仍可继续。", false); }
+  window.CloudSync?.changed();
 }
 
 function todayInTimeZone(date = new Date()) {
@@ -158,7 +159,7 @@ function updateCompletion() {
   const completed = Boolean(state.progress.completedDates[state.current.date]);
   $("#complete-button").disabled = done !== total || completed;
   $("#complete-button").textContent = completed ? "✓ 已完成" : "今日の練習を完了";
-  $("#completion-hint").textContent = completed ? "学习记录已保存到当前浏览器。" : done === total ? "全部题目已记录，可以完成今天的练习。" : `还差 ${total - done} 题。查看答案后记录答题结果。`;
+  $("#completion-hint").textContent = completed ? "学习记录已保存；登录后也会同步到其他设备。" : done === total ? "全部题目已记录，可以完成今天的练习。" : `还差 ${total - done} 题。查看答案后记录答题结果。`;
   renderHistory();
 }
 
@@ -256,8 +257,9 @@ function renderExercise(exercise, index) {
 }
 
 function renderLesson(lesson) {
+  const oldSelection = JSON.stringify(state.progress.dailySelections[lesson.date]);
   state.activeExercises = Adaptive.chooseExercises(lesson, state.progress);
-  if (lesson.review_exercises?.length) saveProgress();
+  if (JSON.stringify(state.progress.dailySelections[lesson.date]) !== oldSelection) saveProgress();
   $("#hero-date").textContent = formatDate(lesson.date);
   $("#hero-duration").textContent = `约 ${lesson.duration_minutes} 分钟`;
   $("#hero-title").textContent = lesson.title;
@@ -267,7 +269,7 @@ function renderLesson(lesson) {
   const reviewNames = reviewIds.map(id => lesson.grammar_points.find(point => point.id === id)?.name || id);
   $("#lesson-explanation").textContent = lesson.explanation + (reviewNames.length ? ` 本期复习：${reviewNames.join("、")}。` : "");
   $("#adaptive-note").hidden = !selectedReviews.length;
-  if (selectedReviews.length) $("#adaptive-note").textContent = `本机自适应复习：根据已有答题记录，今天加练「${reviewNames.join("、")}」。选择只保存在当前浏览器。`;
+  if (selectedReviews.length) $("#adaptive-note").textContent = `根据已有答题记录，今天加练「${reviewNames.join("、")}」。登录后复习题选择也会跨设备同步。`;
   const visiblePointIds = new Set(state.activeExercises.flatMap(item => item.grammar_points));
   const visiblePoints = lesson.grammar_points.filter(point => visiblePointIds.has(point.id));
   $("#grammar-points").replaceChildren(...visiblePoints.map((point, i) => {
@@ -327,6 +329,16 @@ async function init() {
     if (state.current) renderLesson(state.current);
     renderHistory();
     closeClear();
+  });
+  await window.CloudSync.init({
+    getProgress: () => state.progress,
+    emptyProgress,
+    setProgress: (progress) => {
+      state.progress = progress;
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(progress)); } catch { /* In-memory progress still works. */ }
+      if (state.current) renderLesson(state.current);
+      else renderHistory();
+    }
   });
   try {
     const index = await getJSON("./data/index.json");
