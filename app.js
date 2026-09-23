@@ -1,6 +1,21 @@
 const state = { index: [], current: null, view: "today", mistakes: loadMistakes() };
 const $ = (selector) => document.querySelector(selector);
 const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = text; return node; };
+// Lesson copy uses 漢字{かんじ}; build ruby nodes without injecting HTML from JSON.
+function rubyEl(tag, className, source) {
+  const node = el(tag, className);
+  const pattern = /([\u3400-\u9fff々〆ヶ]+)\{([ぁ-んァ-ヶー]+)\}/g;
+  let cursor = 0;
+  for (const match of String(source).matchAll(pattern)) {
+    node.append(document.createTextNode(source.slice(cursor, match.index)));
+    const ruby = document.createElement("ruby");
+    ruby.append(document.createTextNode(match[1]), el("rp", "", "("), el("rt", "", match[2]), el("rp", "", ")"));
+    node.append(ruby);
+    cursor = match.index + match[0].length;
+  }
+  node.append(document.createTextNode(source.slice(cursor)));
+  return node;
+}
 
 function loadMistakes() { try { return JSON.parse(localStorage.getItem("n2-mistakes-v1")) || {}; } catch { return {}; } }
 function saveMistakes() { localStorage.setItem("n2-mistakes-v1", JSON.stringify(state.mistakes)); updateCount(); }
@@ -34,21 +49,21 @@ function renderLesson(lesson) {
   $("#hero-subtitle").textContent = lesson.subtitle;
   const tags = $("#hero-tags"); tags.replaceChildren(...lesson.tags.map(tag => el("span", "tag", tag)));
   const points = $("#lesson-points"); points.replaceChildren(...lesson.points.map((point, i) => {
-    const card = el("article", "point"); card.append(el("p", "point-label", `POINT ${String(i+1).padStart(2,"0")}`), el("h3", "", point.term), el("p", "", point.meaning), el("p", "point-example", point.example)); return card;
+    const card = el("article", "point"); card.append(el("p", "point-label", `POINT ${String(i+1).padStart(2,"0")}`), el("h3", "", point.term), el("p", "", point.meaning), rubyEl("p", "point-example", point.example)); return card;
   }));
   $("#question-progress").textContent = `共 ${lesson.questions.length} 题`;
   $("#questions").replaceChildren(...lesson.questions.map((question, i) => renderQuestion(question, i, lesson)));
-  $("#takeaway").replaceChildren(el("p", "", lesson.takeaway), el("small", "", lesson.takeawayNote || ""));
+  $("#takeaway").replaceChildren(el("p", "", lesson.takeaway), rubyEl("small", "", lesson.takeawayNote || ""));
 }
 
 function renderQuestion(question, index, lesson) {
   const card = el("article", "question-card");
   const top = el("div", "question-top"); top.append(el("span", "", `QUESTION ${String(index+1).padStart(2,"0")}`), el("span", "", question.tag || "语法选择")); card.append(top);
-  card.append(el("p", "question-prompt", question.prompt), el("p", "question-jp", question.sentence));
+  card.append(el("p", "question-prompt", question.prompt), rubyEl("p", "question-jp", question.sentence));
   const choices = el("div", "choices"); const feedback = el("span", "feedback"); const answer = el("div", "answer"); answer.hidden = true;
-  const answerLabel = el("strong", "", `答案：${question.options[question.answer]}`); answer.append(answerLabel, el("p", "", question.explanation));
+  const answerLabel = rubyEl("strong", "", `答案：${question.options[question.answer]}`); answer.append(answerLabel, rubyEl("p", "", question.explanation));
   question.options.forEach((option, choiceIndex) => {
-    const button = el("button", "choice", `${String.fromCharCode(65+choiceIndex)}. ${option}`); button.type = "button";
+    const button = rubyEl("button", "choice", `${String.fromCharCode(65+choiceIndex)}. ${option}`); button.type = "button";
     button.addEventListener("click", () => {
       choices.querySelectorAll("button").forEach((item, i) => { item.classList.toggle("selected", i === choiceIndex); item.classList.toggle("correct", i === question.answer); item.classList.toggle("incorrect", i === choiceIndex && i !== question.answer); });
       answer.hidden = false; toggle.textContent = "收起解析"; toggle.setAttribute("aria-expanded", "true");
@@ -70,10 +85,15 @@ function renderHistory() {
   $("#history-list").replaceChildren(...state.index.slice(1).map(item => { const button = el("button", "history-item"); button.type = "button"; button.dataset.date = item.date; button.append(el("span", "history-date", item.date.slice(5).replace("-", "/")), el("span", "history-title", item.title)); button.addEventListener("click", () => showLesson(item.date)); return button; }));
 }
 
-function showReview() {
+async function showReview() {
   state.view = "review"; $("#lesson-view").hidden = true; $("#review-view").hidden = false; hideStatus(); setActive("review"); history.replaceState(null, "", "#review");
   const entries = Object.entries(state.mistakes).sort((a,b) => b[1].date.localeCompare(a[1].date));
-  $("#review-items").replaceChildren(...(entries.length ? entries.map(([key,item]) => { const card = el("article", "review-card"); card.append(el("div", "question-top", `${item.date} · ${item.title}`), el("h3", "", item.prompt), el("p", "", item.sentence), el("p", "", `答案：${item.answer}。${item.explanation}`)); const done = el("button", "", "已掌握 · 移出复习"); done.type = "button"; done.addEventListener("click", () => { delete state.mistakes[key]; saveMistakes(); showReview(); }); card.append(done); return card; }) : [el("div", "empty-review", "这里还没有错题。答错或点击「加入复习」后，就能在这里回顾。")]));
+  const lessons = await Promise.all([...new Set(entries.map(([,item]) => item.date))].map(async date => {
+    try { return [date, await getJSON(`./data/${date}.json`)]; } catch { return [date, null]; }
+  }));
+  if (state.view !== "review") return;
+  const byDate = new Map(lessons);
+  $("#review-items").replaceChildren(...(entries.length ? entries.map(([key,item]) => { const current = byDate.get(item.date)?.questions?.find(question => question.id === item.id); const display = current ? { ...item, sentence: current.sentence, answer: current.options[current.answer], explanation: current.explanation } : item; const card = el("article", "review-card"); card.append(el("div", "question-top", `${display.date} · ${display.title}`), el("h3", "", display.prompt), rubyEl("p", "", display.sentence), rubyEl("p", "", `答案：${display.answer}。${display.explanation}`)); const done = el("button", "", "已掌握 · 移出复习"); done.type = "button"; done.addEventListener("click", () => { delete state.mistakes[key]; saveMistakes(); showReview(); }); card.append(done); return card; }) : [el("div", "empty-review", "这里还没有错题。答错或点击「加入复习」后，就能在这里回顾。")]));
 }
 
 async function init() {
