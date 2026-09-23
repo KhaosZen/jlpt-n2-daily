@@ -3,16 +3,19 @@
 const TIME_ZONE = "Asia/Shanghai";
 const STORAGE_KEY = "n2-progress-v2";
 const $ = (selector) => document.querySelector(selector);
-const state = { lessons: [], current: null, progress: loadProgress(), today: todayInTimeZone() };
+const state = { lessons: [], current: null, activeExercises: [], progress: loadProgress(), today: todayInTimeZone() };
 
 function emptyProgress() {
-  return { version: 2, completedDates: {}, attempts: {}, grammarStats: {} };
+  return { version: 2, completedDates: {}, attempts: {}, grammarStats: {}, dailySelections: {} };
 }
 
 function loadProgress() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (saved?.version === 2 && saved.completedDates && saved.attempts && saved.grammarStats) return saved;
+    if (saved?.version === 2 && saved.completedDates && saved.attempts && saved.grammarStats) {
+      saved.dailySelections ||= {};
+      return saved;
+    }
   } catch { /* Damaged or unavailable storage starts a fresh local record. */ }
   return emptyProgress();
 }
@@ -118,8 +121,8 @@ function recordAttempt(exercise, answer, isCorrect) {
 function updateCompletion() {
   if (!state.current) return;
   const attempts = state.progress.attempts[state.current.date] || {};
-  const done = state.current.exercises.filter(item => typeof attempts[item.id]?.isCorrect === "boolean").length;
-  const total = state.current.exercises.length;
+  const done = state.activeExercises.filter(item => typeof attempts[item.id]?.isCorrect === "boolean").length;
+  const total = state.activeExercises.length;
   $("#question-progress").textContent = `${done}/${total} 题已记录`;
   const completed = Boolean(state.progress.completedDates[state.current.date]);
   $("#complete-button").disabled = done !== total || completed;
@@ -222,13 +225,21 @@ function renderExercise(exercise, index) {
 }
 
 function renderLesson(lesson) {
+  state.activeExercises = Adaptive.chooseExercises(lesson, state.progress);
+  if (lesson.review_exercises?.length) saveProgress();
   $("#hero-date").textContent = formatDate(lesson.date);
   $("#hero-duration").textContent = `约 ${lesson.duration_minutes} 分钟`;
   $("#hero-title").textContent = lesson.title;
   $("#hero-summary").textContent = lesson.summary;
-  const reviewNames = lesson.review_points.map(id => lesson.grammar_points.find(point => point.id === id)?.name || id);
+  const selectedReviews = state.activeExercises.filter(item => lesson.review_exercises?.some(review => review.id === item.id));
+  const reviewIds = selectedReviews.length ? [...new Set(selectedReviews.flatMap(item => item.grammar_points))] : lesson.review_points;
+  const reviewNames = reviewIds.map(id => lesson.grammar_points.find(point => point.id === id)?.name || id);
   $("#lesson-explanation").textContent = lesson.explanation + (reviewNames.length ? ` 本期复习：${reviewNames.join("、")}。` : "");
-  $("#grammar-points").replaceChildren(...lesson.grammar_points.map((point, i) => {
+  $("#adaptive-note").hidden = !selectedReviews.length;
+  if (selectedReviews.length) $("#adaptive-note").textContent = `本机自适应复习：根据已有答题记录，今天加练「${reviewNames.join("、")}」。选择只保存在当前浏览器。`;
+  const visiblePointIds = new Set(state.activeExercises.flatMap(item => item.grammar_points));
+  const visiblePoints = lesson.grammar_points.filter(point => visiblePointIds.has(point.id));
+  $("#grammar-points").replaceChildren(...visiblePoints.map((point, i) => {
     const card = node("article", "point");
     card.append(node("p", "point-label", `POINT ${String(i + 1).padStart(2, "0")}`),
       node("h3", "", point.name), node("p", "", point.explanation));
@@ -239,7 +250,7 @@ function renderLesson(lesson) {
     card.append(richNode("p", "example-jp", example.jp), node("p", "example-zh", example.zh));
     return card;
   }));
-  $("#exercises").replaceChildren(...lesson.exercises.map(renderExercise));
+  $("#exercises").replaceChildren(...state.activeExercises.map(renderExercise));
   updateCompletion();
 }
 

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "start_date": "2026-09-26",
+  "topics": [
+    { "title": "から・ので", "points": [{ "id": "kara-reason", "name": "から" }, { "id": "node-reason", "name": "ので" }] },
+    { "title": "ように・ために", "points": [{ "id": "youni-purpose", "name": "ように" }, { "id": "tameni-purpose", "name": "ために" }] },
+    { "title": "は・が", "points": [{ "id": "wa", "name": "は" }, { "id": "ga", "name": "が" }] },
+    { "title": "を・に・で", "points": [{ "id": "wo", "name": "を" }, { "id": "ni", "name": "に" }, { "id": "de", "name": "で" }] },
+    { "title": "なら・たら", "points": [{ "id": "nara", "name": "なら" }, { "id": "tara", "name": "たら" }] },
+    { "title": "そうだ・ようだ", "points": [{ "id": "souda-hearsay", "name": "そうだ" }, { "id": "youda", "name": "ようだ" }] },
+    { "title": "ことにする・ことになる", "points": [{ "id": "kotonisuru", "name": "ことにする" }, { "id": "kotoninaru", "name": "ことになる" }] },
+    { "title": "ばかり・ところ", "points": [{ "id": "bakari", "name": "ばかり" }, { "id": "tokoro", "name": "ところ" }] },
+    { "title": "てしまう・ておく", "points": [{ "id": "teshimau", "name": "てしまう" }, { "id": "teoku", "name": "ておく" }] },
+    { "title": "ても・のに", "points": [{ "id": "temo", "name": "ても" }, { "id": "noni", "name": "のに" }] },
+    { "title": "だけ・しか～ない", "points": [{ "id": "dake", "name": "だけ" }, { "id": "shika-nai", "name": "しか～ない" }] },
+    { "title": "まで・までに", "points": [{ "id": "made", "name": "まで" }, { "id": "made-ni", "name": "までに" }] }
+  ]
+}

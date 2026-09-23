@@ -1,0 +1,72 @@
+name: Generate daily N2 practice
+
+on:
+  schedule:
+    - cron: '15 18 * * *'
+      timezone: 'Asia/Shanghai'
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Optional YYYY-MM-DD date; blank means today in Asia/Shanghai'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  generate-and-deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Test local selection and generation logic
+        run: node --test scripts/*.test.js
+      - name: Generate one lesson with DeepSeek Flash
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          TARGET_DATE: ${{ inputs.date }}
+        run: node scripts/generate-daily.js
+      - name: Validate all lesson data
+        run: node scripts/validate-data.js
+      - name: Commit generated lesson
+        id: changes
+        run: |
+          git add data/index.json data/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].json
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "Add daily N2 practice"
+            git push origin HEAD:main
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/configure-pages@v5
+        if: steps.changes.outputs.changed == 'true'
+      - name: Prepare static site
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          mkdir _site
+          cp index.html styles.css adaptive.js app.js _site/
+          cp -R data _site/
+      - uses: actions/upload-pages-artifact@v4
+        if: steps.changes.outputs.changed == 'true'
+        with:
+          path: _site
+      - name: Deploy generated lesson
+        if: steps.changes.outputs.changed == 'true'
+        id: deployment
+        uses: actions/deploy-pages@v4

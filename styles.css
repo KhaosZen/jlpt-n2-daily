@@ -72,6 +72,7 @@ rt { color: var(--muted); font-size: .58em; font-weight: 500; }
 .section-title h2 { margin: 1px 0 0; font-size: 22px; line-height: 1.3; }
 .section-aside { margin-left: auto; color: var(--muted); font-size: 12px; }
 .lesson-explanation { margin: 0 0 15px; padding: 0 2px; color: var(--muted); font-size: 14px; }
+.adaptive-note { margin: 0 0 17px; padding: 11px 14px; border-left: 3px solid var(--accent); border-radius: 6px; background: var(--soft); color: var(--ink); font-size: 13px; }
 .points { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
 .point, .example, .question-card, .completion-panel { border: 1px solid var(--line); border-radius: 15px; background: var(--card); box-shadow: var(--shadow); }
 .point { padding: 21px 24px; }

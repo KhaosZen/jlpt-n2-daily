@@ -9,8 +9,9 @@
 - 每道题的回答、正误及知识点答题次数/错误次数保存在当前浏览器 `localStorage`。全部题目记录后可标记当日完成，历史列表显示完成状态。
 - 清除学习记录需要浏览器二次确认。支持手机布局、键盘操作、浅色/深色模式。
 - 日文汉字可在 JSON 中写成 `会社{かいしゃ}`，页面会生成 ruby 注音。只在日文内容里使用这个标记。
+- 新生成的练习包含 4 道主题题和多道复习候选题。网页根据当前浏览器的知识点错误率选出 2 道复习题，并固定当天的选择；不上传个人答题记录。
 
-学习记录不会跨设备同步。清理浏览器数据会删除进度。第一阶段不会自动生成练习或推送提醒。
+学习记录不会跨设备同步。清理浏览器数据会删除进度。网站本身不会推送提醒。
 
 ## 项目结构
 
@@ -18,11 +19,15 @@
 index.html                页面结构
 styles.css                响应式和深色模式样式
 app.js                    加载、题型、答题和本地进度
+adaptive.js               根据本地薄弱点选复习题
 data/index.json           已发布日期索引
 data/YYYY-MM-DD.json      每天一份练习
+data/topics.json          自动生成的主题轮换表
 scripts/validate-data.js  无依赖的 JSON 校验脚本
 scripts/serve.js           本地静态预览服务器
-.github/workflows/validate.yml  提交时校验并部署 Pages
+scripts/generate-daily.js DeepSeek Flash 生成脚本
+.github/workflows/validate.yml        提交时校验并部署 Pages
+.github/workflows/generate-daily.yml  每日生成并部署 Pages
 ```
 
 示例数据为 2026-09-21 至 2026-09-25，其中 23–25 日分别练习「はず・つもり」「と・たら」「しか～ない・だけ・は」。
@@ -33,6 +38,7 @@ scripts/serve.js           本地静态预览服务器
 
 ```bash
 node scripts/validate-data.js
+node --test scripts/*.test.js
 node scripts/serve.js
 ```
 
@@ -57,6 +63,7 @@ JSON 顶层字段：
 | `review_points` | 本期复习的知识点 ID，必须也出现在 `grammar_points` |
 | `examples` | 日文 `jp` 与中文 `zh` |
 | `exercises` | 题目数组，每题有唯一 `id`、`type`、`grammar_points`、`prompt`、`answer`、`explanation`、`correction` |
+| `review_exercises` | 可选的自适应复习候选题；有此字段时 `exercises` 恰好 4 题，网页选 2 道复习题 |
 
 题型字段：
 
@@ -68,7 +75,7 @@ JSON 顶层字段：
 
 `explanation` 说明正确表达的语感；`correction` 说明错误项为何错误或不自然。复习旧知识点时在本期 `grammar_points` 添加相同的稳定 ID，再在 `review_points` 标出，并给相应题目标记该 ID。日文注音用 `漢字{かんじ}`，例如 `駅{えき}に着{つ}く`。
 
-进度结构版本为 `2`，包含 `completedDates`、按日期和题目 ID 组织的 `attempts`，以及按知识点 ID 组织的 `grammarStats`（`attempts` 和 `errors`）。本地记录用于未来的错题统计；GitHub Actions 无法读取访问者浏览器里的数据。
+进度结构版本为 `2`，包含 `completedDates`、按日期和题目 ID 组织的 `attempts`、按知识点 ID 组织的 `grammarStats`（`attempts` 和 `errors`），以及当天固定的 `dailySelections`。旧版本 2 的记录可直接使用。复习题按 `(错误次数 + 1) / (答题次数 + 2)` 排序；没有记录时按日期稳定轮换。GitHub Actions 无法读取访问者浏览器里的数据，所以生成的是通用题库，个性化选择在浏览器内完成。
 
 ## 创建仓库并部署 GitHub Pages
 
@@ -88,22 +95,18 @@ JSON 顶层字段：
 
 页面与 JSON 均使用 `./` 相对路径，兼容上述仓库子路径。若仓库之前使用 **Deploy from a branch**，请切换为 **GitHub Actions**，以便使用本工作流。参考 [GitHub 官方 Pages 工作流指南](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)。
 
-## Future Architecture
+## 每日自动生成与自适应复习
 
-第二阶段可建立单独的定时 GitHub Actions 工作流：
+自动生成使用 DeepSeek 官方 `deepseek-flash` 模型的 Chat Completions JSON 模式。配置步骤：
 
-```text
-GitHub Actions 定时触发
-  → 读取可供工作流访问的学习薄弱点数据
-  → 调用 LLM API
-  → 生成 data/YYYY-MM-DD.json 并更新 data/index.json
-  → validate-data.js 校验
-  → 提交新内容
-  → 在同一次工作流中部署 GitHub Pages
-```
+1. 在 DeepSeek 官方平台创建 API Key。到仓库 **Settings → Secrets and variables → Actions → New repository secret**，名称填 `DEEPSEEK_API_KEY`，值填密钥。**不要把密钥写进代码、JSON、网页或聊天消息。**调用模型可能产生 API 费用。
+2. 在 GitHub **Actions → Generate daily N2 practice → Run workflow** 手动运行一次。当天已有练习会跳过；当前示例覆盖至 2026-09-25，可在日期输入框填 `2026-09-26` 测试首个自动生成日。
+3. 查看运行日志及生成的 JSON。脚本会拒绝缺字段、缺复习候选题、无 ruby 注音等结构错误；生成内容仍建议人工阅读，尤其核对日语自然度与答案。校验失败时不会提交或发布。
 
-目前的薄弱点只存于本地浏览器，工作流不能直接读取。第二阶段需先确定个人进度如何安全、主动地导出到工作流可访问的位置；不应假设网站自动同步。生成脚本要检查日文、注音、答案和纠错内容，建议先走人工审核。
+工作流计划在每天 **Asia/Shanghai 18:15** 生成当天练习。GitHub 定时工作流可能延迟，不能保证恰好在 19:00 提醒前完成。若日期文件已存在，工作流会跳过，不覆盖手工编辑的练习；2026-09-26 起按 `data/topics.json` 轮换主题。首次启用后留意 [GitHub Actions](https://github.com/KhaosZen/jlpt-n2-daily/actions) 的运行结果。
 
-LLM API Key 只能放入 **GitHub Actions Secrets**，不能进入 HTML、JavaScript、JSON 或 Git 仓库。由 `GITHUB_TOKEN` 创建的提交通常不会再触发另一轮 Pages 发布，因此生成与部署需在同一次工作流中完成；参见 [GitHub Pages 发布来源说明](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)。
+流程为：GitHub Actions 定时触发 → 调用 DeepSeek Flash → 生成当天 JSON 和索引 → 验证 → 提交 → **同一次工作流**部署 GitHub Pages。由 `GITHUB_TOKEN` 推送的提交不会再触发普通 `push` 工作流，因此生成工作流自行部署；参见 [GitHub Actions 触发规则](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)。DeepSeek 的 [JSON 模式说明](https://api-docs.deepseek.com/guides/json_mode/)解释了 API 格式和空输出的可能性。
+
+**当前自适应范围**是从每天已生成的复习候选题中，挑选适合当前浏览器的两题。生成脚本无法读取本地 `localStorage`，因此不会为某个人单独生成全套新题。若将来要让模型直接依据个人错题生成，须先设计主动且安全的进度同步方式。
 
 职责分工：**GitHub Pages** 承载练习；**GitHub Actions** 发布每日内容；**ChatGPT Scheduled Task** 每天 19:00 提醒“今日の日本語練習が用意できました。”，未来可附上站点地址。网站本身不发送提醒。
