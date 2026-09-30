@@ -44,7 +44,7 @@ function planForDate(date, index = readJSON("index.json"), curriculum = readJSON
 
 function promptForPlan(plan) {
   return {
-    system: `你是严谨的日语教师，面向中文母语学习者设计从初级到高级的语法练习，不限定 JLPT 等级。根据当天主题的实际难度出题，持续巩固助词和基础语法，也练习中高级表达。只输出一个合法 JSON 对象，不要 Markdown。所有题目都必须有唯一且无歧义的最佳答案；详细解释其他选项为什么在该语境错误或不自然。日语例句要自然实用，日文汉字逐词加 漢字{かんじ} 注音，中文说明不要加注音。不要编造语法规则。`,
+    system: `你是严谨的日语教师，面向中文母语学习者设计从初级到高级的语法练习，不限定 JLPT 等级。根据当天主题的实际难度出题，持续巩固助词和基础语法，也练习中高级表达。只输出一个合法 JSON 对象，不要 Markdown。所有题目都必须有唯一且无歧义的最佳答案；详细解释其他选项为什么在该语境错误或不自然。日语例句要自然实用，日文汉字逐词加 漢字{かんじ} 注音，中文说明不要加注音。选择题的每一个选项（包括错误选项）也必须逐词标注汉字读音；拿不准读音时请改用纯假名表达。不要编造语法规则。`,
     user: `请为 ${plan.date} 生成一份 5–10 分钟练习，主题「${plan.topic.title}」。题目难度以主题为准，不要统一压到 N2；讲解要让约 N2 水平、但基础不够扎实的学习者也能理解。
 主知识点 ID 和名称：${JSON.stringify(plan.topic.points)}。
 复习候选知识点（保持这些稳定 ID）：${JSON.stringify(plan.reviewPoints)}。
@@ -62,9 +62,8 @@ function promptForPlan(plan) {
   };
 }
 
-async function requestDeepSeek(plan, apiKey, fetcher = fetch) {
+async function requestDeepSeekJSON(prompts, apiKey, fetcher = fetch, maxTokens = 8192) {
   if (!apiKey) throw new Error("缺少 DEEPSEEK_API_KEY：请在仓库 Actions Secrets 中配置");
-  const prompts = promptForPlan(plan);
   const response = await fetcher("https://api.deepseek.com/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
@@ -73,7 +72,7 @@ async function requestDeepSeek(plan, apiKey, fetcher = fetch) {
       messages: [{ role: "system", content: prompts.system }, { role: "user", content: prompts.user }],
       response_format: { type: "json_object" },
       thinking: { type: "disabled" },
-      max_tokens: 8192,
+      max_tokens: maxTokens,
       stream: false
     }),
     signal: AbortSignal.timeout(150000)
@@ -86,6 +85,57 @@ async function requestDeepSeek(plan, apiKey, fetcher = fetch) {
   if (!content?.trim()) throw new Error("DeepSeek 返回空内容");
   try { return JSON.parse(content); }
   catch { throw new Error("DeepSeek 未返回可解析的 JSON"); }
+}
+
+async function requestDeepSeek(plan, apiKey, fetcher = fetch) {
+  return requestDeepSeekJSON(promptForPlan(plan), apiKey, fetcher);
+}
+
+const rubyPattern = /[\u3400-\u9fff々〆ヶ]+\{[ぁ-んァ-ヶー]+\}/g;
+const kanjiPattern = /[\u3400-\u9fff々〆ヶ]/;
+const withoutRuby = text => text.replace(rubyPattern, match => match.slice(0, match.indexOf("{")));
+const needsRuby = text => kanjiPattern.test(text.replace(rubyPattern, ""));
+
+function rubyFields(lesson) {
+  const fields = [];
+  const add = (object, key, field) => {
+    if (typeof object?.[key] === "string" && needsRuby(object[key])) fields.push({ object, key, field, text: object[key] });
+  };
+  lesson.examples?.forEach((example, i) => add(example, "jp", `examples[${i}].jp`));
+  for (const group of ["exercises", "review_exercises"]) {
+    lesson[group]?.forEach((exercise, i) => {
+      const at = `${group}[${i}]`;
+      if (exercise.type === "rewrite") {
+        add(exercise, "source", `${at}.source`);
+        add(exercise, "answer", `${at}.answer`);
+      } else {
+        add(exercise, "jp", `${at}.jp`);
+        if (exercise.type === "multiple_choice") exercise.options?.forEach((_, j) => add(exercise.options, j, `${at}.options[${j}]`));
+      }
+    });
+  }
+  return fields;
+}
+
+async function repairFurigana(lesson, apiKey, fetcher = fetch) {
+  const fields = rubyFields(lesson);
+  if (!fields.length) return lesson;
+  const prompts = {
+    system: "你是日语读音校对员。只输出合法 JSON。对每条日文原文，仅在尚未注音的汉字后插入 {假名读音}。禁止删除、替换或重排任何原有字符；标点、空格和已有注音也保持不变。必须处理每一条。",
+    user: `请返回 {"items":[{"field":"原字段路径","text":"补标后的原文"}]}，字段路径和条数与输入完全一致。示例：学校へ行く → 学校{がっこう}へ行{い}く。输入：${JSON.stringify(fields.map(({ field, text }) => ({ field, text })))}`
+  };
+  const result = await requestDeepSeekJSON(prompts, apiKey, fetcher, 4096);
+  if (!Array.isArray(result.items) || result.items.length !== fields.length) throw new Error("读音补标返回的字段数量不符");
+  const repaired = new Map(result.items.map(item => [item.field, item.text]));
+  if (repaired.size !== fields.length) throw new Error("读音补标返回了重复字段");
+  for (const { field, text } of fields) {
+    const next = repaired.get(field);
+    if (typeof next !== "string" || withoutRuby(next) !== withoutRuby(text) || needsRuby(next)) {
+      throw new Error(`读音补标未通过原文校验：${field}`);
+    }
+  }
+  for (const { object, key, field } of fields) object[key] = repaired.get(field);
+  return lesson;
 }
 
 function verifyPlan(lesson, plan) {
@@ -122,6 +172,7 @@ async function main() {
     try {
       const lesson = await requestDeepSeek(plan, process.env.DEEPSEEK_API_KEY);
       verifyPlan(lesson, plan);
+      await repairFurigana(lesson, process.env.DEEPSEEK_API_KEY);
       const nextIndex = { ...index, lessons: [{ date, title: lesson.title }, ...index.lessons].sort((a, b) => b.date.localeCompare(a.date)) };
       fs.writeFileSync(target, `${JSON.stringify(lesson, null, 2)}\n`);
       fs.writeFileSync(path.join(dataDir, "index.json"), `${JSON.stringify(nextIndex, null, 2)}\n`);
@@ -139,4 +190,4 @@ async function main() {
 }
 
 if (require.main === module) main().catch(error => { console.error(error.message); process.exitCode = 1; });
-module.exports = { todayShanghai, planForDate, promptForPlan, requestDeepSeek, verifyPlan };
+module.exports = { todayShanghai, planForDate, promptForPlan, requestDeepSeek, repairFurigana, rubyFields, verifyPlan };
