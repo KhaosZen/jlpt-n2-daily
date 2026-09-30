@@ -2,7 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { todayShanghai, planForDate, promptForPlan, requestDeepSeek, verifyPlan } = require("./generate-daily.js");
+const { todayShanghai, planForDate, promptForPlan, requestDeepSeek, repairFurigana, rubyFields, verifyPlan } = require("./generate-daily.js");
 
 test("uses the Shanghai calendar date across UTC midnight", () => {
   assert.equal(todayShanghai(new Date("2026-09-25T16:30:00Z")), "2026-09-26");
@@ -21,6 +21,13 @@ test("rotates through beginner and advanced grammar without an N2-only generatio
   const prompts = promptForPlan(planForDate("2026-10-03"));
   assert.match(prompts.system, /不限定 JLPT 等级/);
   assert.match(prompts.user, /题目难度以主题为准/);
+});
+
+test("backfilling September 29 keeps its own topic even when September 30 is indexed", () => {
+  const plan = planForDate("2026-09-29");
+  assert.equal(plan.date, "2026-09-29");
+  assert.equal(plan.topic.title, "わけではない・とは限らない");
+  assert.notEqual(plan.topic.title, planForDate("2026-09-30").topic.title);
 });
 
 test("sends DeepSeek Flash JSON request with the key only in the authorization header", async () => {
@@ -42,4 +49,31 @@ test("sends DeepSeek Flash JSON request with the key only in the authorization h
 test("rejects generated lessons missing review candidates", () => {
   const plan = planForDate("2026-09-26");
   assert.throws(() => verifyPlan({ date: plan.date, title: plan.topic.title, grammar_points: [], review_points: [], examples: [], exercises: [], review_exercises: [] }, plan));
+});
+
+test("repairs missing furigana in every option without changing its Japanese text", async () => {
+  const lesson = { examples: [{ jp: "学校{がっこう}へ行く" }],
+    exercises: [{ type: "multiple_choice", jp: "（　）", options: ["だけ", "会社", "勉強"] }], review_exercises: [] };
+  assert.deepEqual(rubyFields(lesson).map(item => item.field), ["examples[0].jp", "exercises[0].options[1]", "exercises[0].options[2]"]);
+  const fetcher = async (_url, request) => {
+    const body = JSON.parse(request.body);
+    assert.match(body.messages[1].content, /exercises\[0\]\.options\[1\]/);
+    return { ok: true, json: async () => ({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ items: [
+      { field: "examples[0].jp", text: "学校{がっこう}へ行{い}く" },
+      { field: "exercises[0].options[1]", text: "会社{かいしゃ}" },
+      { field: "exercises[0].options[2]", text: "勉強{べんきょう}" }
+    ] }) } }] }) };
+  };
+  await repairFurigana(lesson, "test-secret", fetcher);
+  assert.equal(lesson.exercises[0].options[1], "会社{かいしゃ}");
+  assert.equal(rubyFields(lesson).length, 0);
+});
+
+test("rejects furigana repair that changes an answer option", async () => {
+  const lesson = { examples: [], exercises: [{ type: "multiple_choice", jp: "（　）", options: ["会社"] }] };
+  const fetcher = async () => ({ ok: true, json: async () => ({ choices: [{ finish_reason: "stop", message: {
+    content: JSON.stringify({ items: [{ field: "exercises[0].options[0]", text: "学校{がっこう}" }] })
+  } }] }) });
+  await assert.rejects(repairFurigana(lesson, "test-secret", fetcher), /原文校验/);
+  assert.equal(lesson.exercises[0].options[0], "会社");
 });
